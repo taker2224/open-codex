@@ -3,7 +3,8 @@
   "scripts": {
     "release": "cd codex-cli && npm run release",
     "format": "prettier --check *.json *.md .github/workflows/*.yml",
-    "format:fix": "prettier --write *.json *.md .github/workflows/*.yml"
+    "format:fix": "prettier --write *.json *.md .github/workflows/*.yml",
+    "pubmed:glaucoma": "node scripts/glaucoma-pubmed-notifier.mjs"
   },
   "devDependencies": {
     "prettier": "^3.5.3"

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タスクマネージャー</title>
+<link rel="stylesheet" href="https://unpkg.com/frappe-gantt/dist/frappe-gantt.css">
+<style>
+  body { font-family: Arial, sans-serif; margin: 1rem; }
+  h2 { margin-top: 2rem; }
+  textarea, input, select { margin: 0.5rem 0; width: 100%; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border-bottom: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+  th { background-color: #f5f5f5; }
+  .gantt-controls button { margin-right: 0.5rem; }
+  .reminder { color: red; }
+</style>
+</head>
+<body>
+<h1>タスクマネージャー</h1>
+<!-- Inbox -->
+<h2>① タスクを追加</h2>
+<textarea id="inbox" rows="3" placeholder="やることを入力"></textarea>
+<button id="addInbox">追加</button>
+<ul id="inboxList"></ul>
+<!-- Management -->
+<h2>② タスク管理</h2>
+<div id="management"></div>
+<!-- Gantt -->
+<h2>③ ガントチャート</h2>
+<div class="gantt-controls">
+  <button data-scale="Day">日</button>
+  <button data-scale="3 Day">3日</button>
+  <button data-scale="Week">週</button>
+  <button data-scale="Month">月</button>
+  <button data-scale="Quarter">3ヶ月</button>
+  <button data-scale="Half">6ヶ月</button>
+  <button data-scale="Year">12ヶ月</button>
+  <button data-scale="2 Year">2年</button>
+</div>
+<div id="gantt"></div>
+<script src="https://unpkg.com/frappe-gantt/dist/frappe-gantt.min.js"></script>
+<script>
+const inboxList = document.getElementById('inboxList');
+const inbox = document.getElementById('inbox');
+const addInboxBtn = document.getElementById('addInbox');
+const management = document.getElementById('management');
+let tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
+let inboxItems = JSON.parse(localStorage.getItem('inbox') || '[]');
+
+function save() {
+  localStorage.setItem('tasks', JSON.stringify(tasks));
+  localStorage.setItem('inbox', JSON.stringify(inboxItems));
+}
+
+function renderInbox() {
+  inboxList.innerHTML = '';
+  inboxItems.forEach((text, i) => {
+    const li = document.createElement('li');
+    li.textContent = text;
+    const btn = document.createElement('button');
+    btn.textContent = '分類';
+    btn.onclick = () => moveToManagement(i);
+    li.appendChild(btn);
+    inboxList.appendChild(li);
+  });
+}
+
+addInboxBtn.onclick = () => {
+  if (inbox.value.trim()) {
+    inboxItems.push(inbox.value.trim());
+    inbox.value = '';
+    save();
+    renderInbox();
+  }
+};
+
+function moveToManagement(index) {
+  const text = inboxItems.splice(index, 1)[0];
+  const task = { id: Date.now(), text, category: 'official', due: '', steps: [], progress: 0, learning: false, reminder: null };
+  tasks.push(task);
+  save();
+  renderInbox();
+  renderManagement();
+  renderGantt();
+}
+
+function renderManagement() {
+  management.innerHTML = '';
+  const table = document.createElement('table');
+  const header = document.createElement('tr');
+  header.innerHTML = '<th>タスク</th><th>分類</th><th>期限</th><th>ステップ</th><th>学習?</th><th>進捗</th>';
+  table.appendChild(header);
+  tasks.forEach(t => {
+    const tr = document.createElement('tr');
+    const stepList = t.steps.map((s,i) => `<label><input type="checkbox" data-task="${t.id}" data-step="${i}" ${s.done?'checked':''}>${s.text}</label>`).join('<br>');
+    tr.innerHTML = `<td>${t.text}</td>
+      <td><select data-id="${t.id}">
+        <option value="oph">眼科</option>
+        <option value="official">official</option>
+        <option value="private">private</option>
+      </select></td>
+      <td><input type="date" data-date="${t.id}" value="${t.due}"></td>
+      <td><button data-addstep="${t.id}">追加</button><br>${stepList}</td>
+      <td><input type="checkbox" data-learn="${t.id}" ${t.learning?'checked':''}></td>
+      <td>${Math.round(t.progress)}%</td>`;
+    table.appendChild(tr);
+  });
+  management.appendChild(table);
+  // set selects
+  tasks.forEach(t => {
+    const sel = table.querySelector(`select[data-id='${t.id}']`);
+    sel.value = t.category;
+    sel.onchange = () => { t.category = sel.value; save(); renderGantt(); };
+    const date = table.querySelector(`input[data-date='${t.id}']`);
+    date.onchange = () => { t.due = date.value; save(); renderGantt(); };
+    const addBtn = table.querySelector(`button[data-addstep='${t.id}']`);
+    addBtn.onclick = () => addStep(t.id);
+    const learn = table.querySelector(`input[data-learn='${t.id}']`);
+    learn.onchange = () => { t.learning = learn.checked; if(learn.checked) scheduleReminder(t); save(); };
+  });
+  table.querySelectorAll('input[type="checkbox"][data-task]').forEach(cb => {
+    cb.onchange = () => {
+      const t = tasks.find(x => x.id == cb.dataset.task);
+      const step = t.steps[cb.dataset.step];
+      step.done = cb.checked;
+      t.progress = t.steps.filter(s=>s.done).length / t.steps.length * 100;
+      save();
+      renderManagement();
+      renderGantt();
+    };
+  });
+}
+
+function addStep(taskId) {
+  const text = prompt('ステップ内容');
+  if (!text) return;
+  const t = tasks.find(x => x.id == taskId);
+  t.steps.push({text, done:false});
+  save();
+  renderManagement();
+  renderGantt();
+}
+
+function renderGantt() {
+  const container = document.getElementById('gantt');
+  container.innerHTML = '';
+  const ganttTasks = tasks.filter(t=>t.due).map(t=>({
+    id: ''+t.id,
+    name: t.text,
+    start: new Date().toISOString().split('T')[0],
+    end: t.due,
+    progress: t.progress,
+    custom_class: t.category
+  }));
+  if (!ganttTasks.length) return;
+  const gantt = new Gantt(container, ganttTasks, { view_mode: currentScale });
+  window.currentGantt = gantt;
+}
+let currentScale = 'Day';
+
+document.querySelectorAll('.gantt-controls button').forEach(btn => {
+  btn.onclick = () => {
+    currentScale = btn.dataset.scale;
+    if (window.currentGantt) window.currentGantt.change_view_mode(currentScale);
+  };
+});
+
+function scheduleReminder(task) {
+  if (!task.learning) return;
+  const intervals = [1,3,7,14,30];
+  const now = Date.now();
+  const next = intervals.find(i => !task.reminder || now < task.reminder + i*86400000);
+  if (next) task.reminder = now + next*86400000;
+}
+
+function checkReminders() {
+  const now = Date.now();
+  tasks.forEach(t => {
+    if (t.learning && t.reminder && now >= t.reminder) {
+      alert('学習リマインド: ' + t.text);
+      scheduleReminder(t);
+      save();
+    }
+  });
+}
+
+renderInbox();
+renderManagement();
+renderGantt();
+checkReminders();
+</script>
+</body>
+</html>

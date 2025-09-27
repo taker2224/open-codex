@@ -232,6 +232,7 @@ Below are a few bite‑size examples you can copy‑paste. Replace the text in q
 | 5   | `codex "Explain what this regex does: ^(?=.*[A-Z]).{8,}$"`                      | Outputs a step‑by‑step human explanation.                                  |
 | 6   | `codex "Carefully review this repo, and propose 3 high impact well-scoped PRs"` | Suggests impactful PRs in the current codebase.                            |
 | 7   | `codex "Look for vulnerabilities and create a security review report"`          | Finds and explains security bugs.                                          |
+| 8   | `codex "Create a MoviePy script for a LINE-style animated sticker"`             | Produces a bobbing + breathing animation template. See [docs/line-stamp-style-animation.md](docs/line-stamp-style-animation.md). |
 
 ---
 

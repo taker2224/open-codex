@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            codex-cli/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install CLI dependencies
+        working-directory: codex-cli
+        run: npm ci
+
+      - name: Run tests
+        working-directory: codex-cli
+        run: |
+          npm test
+          npm run lint
+          npm run typecheck
+
+      - name: Build CLI bundle
+        working-directory: codex-cli
+        run: npm run build
+
+      - name: Publish package
+        working-directory: codex-cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
